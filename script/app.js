@@ -13,7 +13,8 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
     viewport,
     channel,
     controls,
-    lines = [];
+    lines = [],
+    clearButton = document.getElementById('clear');
 
   body = document.body;
 
@@ -57,6 +58,7 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
   input.onstopmove = stopMoveHandler;
   channel.ondata = dataHandler;
   channel.onclear = viewport.clear;
+  clearButton.onclick = channel.clear;
 }());
 
 
@@ -78,6 +80,17 @@ function PaintChannel (url) {
   this.write = function (data) {
     var content = {type: 'lines', emitter: self.userId, timestamp: Date.now(), lines: JSON.stringify(data)};
     paintCollection.createDocument(content);
+  };
+
+  this.clear = function() {
+    paintCollection.deleteDocument({query: {term: {type: 'lines'}}}, function (error, result) {
+        if (error) {
+          console.log(error);
+        } else {
+          paintCollection.publish({type: 'clear', emitter: self.userId});
+          self.onclear();
+        }
+      });
   };
 
   this.loadLines = function(query, offset, limit) {
