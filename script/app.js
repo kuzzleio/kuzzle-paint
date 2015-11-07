@@ -11,6 +11,7 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
   var body,
     input,
     viewport,
+    channel,
     controls;
 
   body = document.body;
@@ -18,6 +19,7 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
   function dataHandler (data) {
     if ('c' in data == false) {
       data.c = controls.color;
+      channel.send(data);
     }
     viewport.draw(data);
   }
@@ -30,6 +32,7 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
     body.className = 'online';
   }
 
+  channel = new PaintChannel(config.kuzzleUrl);
   controls = new PaintControls(document.getElementById('menu'));
   viewport = new CanvasViewport(document.getElementById('canvas'));
   input = TOUCH_DEVICE ? new TouchInterface(document.getElementById('canvas'))
@@ -38,10 +41,41 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
   input.ondata = dataHandler;
   input.onstartmove = startMoveHandler;
   input.onstopmove = stopMoveHandler;
+  channel.ondata = dataHandler;
 }());
 
 
 
+function PaintChannel (url) {
+  var
+    self = this,
+    kuzzle,
+    paintCollection,
+    userid;
+
+  this.userId = Math.round(Math.random() * Date.now());
+
+  this.send = function (data) {
+    var content = {type: 'line', emitter: self.userId, line: JSON.stringify(data)};
+    paintCollection.publish(content);
+  };
+
+  (function setup () {
+    kuzzle = new Kuzzle(url, {autoReconnect: true});
+    paintCollection = kuzzle.dataCollectionFactory('paint');
+
+    var filters = {term: {type: 'line'}};
+
+    var newLineNotif = function (error, result) {
+      if (result.controller == 'write' && result.action == 'create') {
+        self.ondata(JSON.parse(result._source.line));
+      }
+    };
+
+    paintCollection.subscribe(filters, newLineNotif, {subscribeToSelf: false});
+
+  }());
+}
 
 
 function TouchInterface (target) {
