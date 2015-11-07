@@ -8,24 +8,16 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
 
 
 (function setupController () {
-  var body;
-  var input;
-  var channel;
-  var viewport;
-  var controls;
+  var body,
+    input,
+    viewport,
+    controls;
 
   body = document.body;
-
-  function stateHandler (connected, reason) {
-    body.className = connected ? 'online' : 'offline';
-    input.enabled = connected;
-    controls.setOnlineUsers(channel.userCount);
-  }
 
   function dataHandler (data) {
     if ('c' in data == false) {
       data.c = controls.color;
-      channel.send(data);
     }
     viewport.draw(data);
   }
@@ -38,7 +30,6 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
     body.className = 'online';
   }
 
-  channel = new PaintChannel(window.APP_URL || 'simple-paint.hydna.net');
   controls = new PaintControls(document.getElementById('menu'));
   viewport = new CanvasViewport(document.getElementById('canvas'));
   input = TOUCH_DEVICE ? new TouchInterface(document.getElementById('canvas'))
@@ -47,74 +38,16 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
   input.ondata = dataHandler;
   input.onstartmove = startMoveHandler;
   input.onstopmove = stopMoveHandler;
-  channel.ondata = dataHandler;
-  channel.onstate = stateHandler;
 }());
 
 
 
-function PaintChannel (url) {
-  var self = this;
-  var connected = false;
-  var hash = '';
-  var channel;
-  var userid;
-
-  this.userId = null;
-  this.userCount = 0;
-
-  this.send = function (data) {
-    data.id = self.userId;
-    channel.send(JSON.stringify(data), 2);
-  };
-
-  if (location.hash && location.hash.length > 1) {
-    hash = '/' + location.hash.substr(1);
-  }
-
-  (function setup () {
-    channel = new HydnaChannel(url + hash, 'rw');
-
-    channel.onopen = function (event) {
-      self.userId = event.data.split(',')[0];
-      self.userCount = parseInt(event.data.split(',')[1]);
-      connected = true;
-      self.onstate(connected);
-    };
-
-    channel.onsignal = function (event) {
-      self.userCount = parseInt(event.data);
-      self.onstate(connected);
-    }
-
-    channel.onmessage = function (event) {
-      try {
-        var data = JSON.parse(event.data);
-        if (data.id != userid) {
-          self.ondata(data);
-        }
-      } catch (encodingError) {
-      }
-    };
-
-    channel.onclose = function (event) {
-      self.userId = null;
-      self.userCount = 0;
-      connected = false;
-      self.onstate(connected, event.reason);
-      if (event.hadError) {
-        return setTimeout(setup, 3000);
-      }
-    };
-  }());
-}
 
 
 function TouchInterface (target) {
-  var self = this;
-  var moves = null;
-
-  this.enabled = false;
+  var
+   self = this,
+   moves = null;
 
   function translate (t) {
     var target = t.target;
@@ -139,10 +72,6 @@ function TouchInterface (target) {
   target.addEventListener('touchstart', function (event) {
     var touch;
 
-    if (self.enabled == false) {
-      return;
-    }
-
     self.onstartmove();
 
     event.preventDefault();
@@ -157,11 +86,12 @@ function TouchInterface (target) {
   });
 
   target.addEventListener('touchmove', function (event) {
-    var touch;
-    var move;
-    var pos;
+    var
+     touch,
+     move,
+     pos;
 
-    if (!moves || self.enabled == false) {
+    if (!moves) {
       return;
     }
 
@@ -206,10 +136,9 @@ function TouchInterface (target) {
 
 
 function PointerInterface (target) {
-  var self = this;
-  var state = null;
-
-  this.enabled = true;
+  var
+    self = this,
+    state = null;
 
   function translate (e) {
     return { x: (e.offsetX || e.layerX) * (target.width / target.clientWidth),
@@ -226,10 +155,6 @@ function PointerInterface (target) {
 
   handler('mousedown', function (event) {
 
-    if (self.enabled == false) {
-      return;
-    }
-
     self.onstartmove();
 
     state = translate(event);
@@ -240,7 +165,7 @@ function PointerInterface (target) {
   handler('mousemove', function (event) {
     var pos;
 
-    if (!state || self.enabled == false) {
+    if (!state) {
       return;
     }
 
@@ -261,7 +186,7 @@ function PointerInterface (target) {
 
 function CanvasViewport (target) {
   var context;
-  
+
   if (typeof G_vmlCanvasManager == 'object') {
     G_vmlCanvasManager.initElement(target);
   }
@@ -284,12 +209,13 @@ function CanvasViewport (target) {
 
 
 function PaintControls (target) {
-  var self = this;
-  var users;
-  var all;
-  var alls;
-  var initial;
-  var menu;
+  var
+    self = this,
+    users,
+    all,
+    alls,
+    initial,
+    menu;
 
   users = document.getElementById('users-online');
   menu = document.getElementById('menu-expander');
