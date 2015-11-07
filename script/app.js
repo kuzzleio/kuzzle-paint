@@ -12,7 +12,8 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
     input,
     viewport,
     channel,
-    controls;
+    controls,
+    lines = [];
 
   body = document.body;
 
@@ -23,6 +24,10 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
     }
     viewport.draw(data);
   }
+  function localDataHandler (data) {
+    dataHandler(data);
+    lines.push(data);
+  }
 
   function startMoveHandler () {
     body.className = 'painting online';
@@ -32,13 +37,22 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
     body.className = 'online';
   }
 
+  function synchronize() {
+    if (lines.length > 0 ) {
+      channel.write(lines);
+      lines = [];
+    }
+  }
+
+  setInterval(synchronize, 1000);
+
   channel = new PaintChannel(config.kuzzleUrl);
   controls = new PaintControls(document.getElementById('menu'));
   viewport = new CanvasViewport(document.getElementById('canvas'));
   input = TOUCH_DEVICE ? new TouchInterface(document.getElementById('canvas'))
                        : new PointerInterface(document.getElementById('canvas'));
 
-  input.ondata = dataHandler;
+  input.ondata = localDataHandler;
   input.onstartmove = startMoveHandler;
   input.onstopmove = stopMoveHandler;
   channel.ondata = dataHandler;
@@ -60,11 +74,60 @@ function PaintChannel (url) {
     paintCollection.publish(content);
   };
 
+  this.write = function (data) {
+    var content = {type: 'lines', emitter: self.userId, timestamp: Date.now(), lines: JSON.stringify(data)};
+    paintCollection.createDocument(content);
+  };
+
+  this.loadLines = function(query, offset, limit) {
+
+    var
+      maxcount = 10000,
+      searchQuery = {
+        filter: query,
+        from: offset,
+        size: limit,
+        sort: {timestamp: {order: 'asc'}}
+    };
+
+    paintCollection.count({query: query}, function (error, result) {
+      if (error){
+        console.log(error);
+        return false
+      }
+      if (result == 0) {
+        return false;
+      }
+
+      paintCollection.advancedSearch(searchQuery, function (error, result) {
+        if (error) {
+          console.log(error);
+          return false;
+        }
+        result.documents.forEach(function(item) {
+          item = JSON.parse(item);
+          if (item.body && item.body.type == 'lines') {
+            var lines = JSON.parse(item.body.lines);
+            lines.forEach(function(line) {
+              self.ondata(line);
+            });
+          }
+        });
+        if ( offset + limit < Math.min(maxcount, result.total)) {
+          self.loadLines(query, offset + limit, limit);
+        }
+      });
+
+    });
+  };
+
   (function setup () {
+    var
+      filters = {term: {type: 'line'}},
+      query = {term: {type: 'lines'}};
+
     kuzzle = new Kuzzle(url, {autoReconnect: true});
     paintCollection = kuzzle.dataCollectionFactory('paint');
-
-    var filters = {term: {type: 'line'}};
 
     var newLineNotif = function (error, result) {
       if (result.controller == 'write' && result.action == 'create') {
@@ -73,6 +136,7 @@ function PaintChannel (url) {
     };
 
     paintCollection.subscribe(filters, newLineNotif, {subscribeToSelf: false});
+    self.loadLines(query, 0, 50);
 
   }());
 }
