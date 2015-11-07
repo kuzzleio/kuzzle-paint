@@ -56,6 +56,7 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
   input.onstartmove = startMoveHandler;
   input.onstopmove = stopMoveHandler;
   channel.ondata = dataHandler;
+  channel.onclear = viewport.clear;
 }());
 
 
@@ -124,7 +125,8 @@ function PaintChannel (url) {
   (function setup () {
     var
       filters = {term: {type: 'line'}},
-      query = {term: {type: 'lines'}};
+      query = {term: {type: 'lines'}},
+      clearFilters = {term: {type: 'clear'}};
 
     kuzzle = new Kuzzle(url, {autoReconnect: true});
     paintCollection = kuzzle.dataCollectionFactory('paint');
@@ -135,7 +137,14 @@ function PaintChannel (url) {
       }
     };
 
+    var clearNotif = function (error, result) {
+      if (result.controller == 'write' && result.action == 'create') {
+        self.onclear();
+      }
+    };
+
     paintCollection.subscribe(filters, newLineNotif, {subscribeToSelf: false});
+    paintCollection.subscribe(clearFilters, clearNotif, {subscribeToSelf: false});
     self.loadLines(query, 0, 50);
 
   }());
@@ -303,6 +312,11 @@ function CanvasViewport (target) {
     context.lineCap = 'round';
     context.stroke();
   };
+
+  this.clear = function() {
+    context.clearRect(0, 0, target.width, target.height);
+  }
+
 }
 
 
