@@ -47,7 +47,7 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
 
   setInterval(synchronize, 1000);
 
-  channel = new PaintChannel(config.kuzzleUrl);
+  channel = new PaintChannel(config.kuzzleHost);
   controls = new PaintControls(document.getElementById('menu'));
   viewport = new CanvasViewport(document.getElementById('canvas'));
   input = TOUCH_DEVICE ? new TouchInterface(document.getElementById('canvas'))
@@ -74,7 +74,7 @@ function PaintChannel (url) {
 
   this.send = function (data) {
     var content = {type: 'line', emitter: self.userId, line: JSON.stringify(data)};
-    paintCollection.publish(content);
+    paintCollection.publishMessage(content);
   };
 
   this.write = function (data) {
@@ -87,7 +87,7 @@ function PaintChannel (url) {
         if (error) {
           console.log(error);
         } else {
-          paintCollection.publish({type: 'clear', emitter: self.userId});
+          paintCollection.publishMessage({type: 'clear', emitter: self.userId});
           self.onclear();
         }
       });
@@ -137,12 +137,12 @@ function PaintChannel (url) {
 
   (function setup () {
     var
-      filters = {term: {type: 'line'}},
+      filters = {equals: {type: 'line'}},
       query = {term: {type: 'lines'}},
-      clearFilters = {term: {type: 'clear'}};
+      clearFilters = {equals: {type: 'clear'}};
 
     kuzzle = new Kuzzle(url, {autoReconnect: true});
-    paintCollection = kuzzle.dataCollectionFactory('paint');
+    paintCollection = kuzzle.dataCollectionFactory('lines', 'paint');
 
     var newLineNotif = function (error, result) {
       if (result.controller == 'write' && result.action == 'create') {
@@ -156,10 +156,9 @@ function PaintChannel (url) {
       }
     };
 
-    paintCollection.subscribe(filters, newLineNotif, {subscribeToSelf: false});
-    paintCollection.subscribe(clearFilters, clearNotif, {subscribeToSelf: false});
+    paintCollection.subscribe(filters, {subscribeToSelf: false}, newLineNotif);
+    paintCollection.subscribe(clearFilters, {subscribeToSelf: false}, clearNotif);
     self.loadLines(query, 0, 50);
-
   }());
 }
 
