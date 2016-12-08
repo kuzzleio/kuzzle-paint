@@ -1,3 +1,3 @@
 var config = {
-  kuzzleHost: 'localhost'
+  kuzzleHost: '192.168.1.169'
 }

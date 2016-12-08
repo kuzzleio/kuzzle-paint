@@ -107,7 +107,7 @@ ul {
     right: 0;
     bottom: 56px;
 
-    max-height: 625px; 
+    max-height: 625px;
 
     height: auto;
 }
@@ -153,7 +153,7 @@ ul {
     -moz-box-sizing:border-box;
          box-sizing:border-box;
 
-    width: 70%;
+    width: 40%;
     height: 100%;
 
     overflow: hidden;
@@ -222,6 +222,10 @@ ul {
 #controls label[for="color-b"] { background-color: #733699; }
 #controls label[for="color-c"] { background-color: #F8F8F8; }
 
+#controls .extra li {
+  float: left;
+  margin: 6px 19px;
+}
 
 #users-online {
     display: inline-block;
@@ -266,7 +270,7 @@ ul {
 #controls .mark {
     width: 30%;
     height: 100%;
-    
+
     text-align: right;
 }
 
@@ -318,7 +322,7 @@ ul {
         bottom: 0;
         right: 0;
         width: 50px;
-        height: 100%;   
+        height: 100%;
     }
 
     #controls > * {

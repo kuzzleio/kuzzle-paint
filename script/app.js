@@ -8,7 +8,9 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
 
 
 (function setupController () {
-  var body,
+  var
+    kuzzle = new Kuzzle(config.kuzzleHost),
+    body,
     input,
     viewport,
     channel,
@@ -47,8 +49,8 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
 
   setInterval(synchronize, 1000);
 
-  channel = new PaintChannel(config.kuzzleHost);
-  controls = new PaintControls(document.getElementById('menu'));
+  channel = new PaintChannel(kuzzle);
+  controls = new PaintControls(kuzzle, document.getElementById('menu'));
   viewport = new CanvasViewport(document.getElementById('canvas'));
   input = TOUCH_DEVICE ? new TouchInterface(document.getElementById('canvas'))
                        : new PointerInterface(document.getElementById('canvas'));
@@ -59,11 +61,12 @@ var TOUCH_DEVICE              = 'ontouchstart' in global ||
   channel.ondata = dataHandler;
   channel.onclear = viewport.clear;
   clearButton.onclick = channel.clear;
+  //clearButton.ontouchstart = channel.clear;
 }());
 
 
 
-function PaintChannel (url) {
+function PaintChannel (kuzzle) {
   var
     self = this,
     kuzzle,
@@ -83,7 +86,7 @@ function PaintChannel (url) {
   };
 
   this.clear = function() {
-    paintCollection.deleteDocument({query: {term: {type: 'lines'}}}, function (error, result) {
+    paintCollection.deleteDocument({}, function (error, result) {
         if (error) {
           console.log(error);
         } else {
@@ -98,7 +101,7 @@ function PaintChannel (url) {
     var
       maxcount = 10000,
       searchQuery = {
-        filter: query,
+        query: query,
         from: offset,
         size: limit,
         sort: {timestamp: {order: 'asc'}}
@@ -141,23 +144,22 @@ function PaintChannel (url) {
       query = {term: {type: 'lines'}},
       clearFilters = {equals: {type: 'clear'}};
 
-    kuzzle = new Kuzzle(url, {autoReconnect: true});
     paintCollection = kuzzle.dataCollectionFactory('lines', 'paint');
 
     var newLineNotif = function (error, result) {
-      if (result.controller == 'write' && result.action == 'create') {
-        self.ondata(JSON.parse(result._source.line));
+      if (result.controller == 'write' && result.action == 'publish') {
+        self.ondata(JSON.parse(result.result._source.line));
       }
     };
 
     var clearNotif = function (error, result) {
-      if (result.controller == 'write' && result.action == 'create') {
+      if (result.controller == 'write' && result.action == 'publish') {
         self.onclear();
       }
     };
 
-    paintCollection.subscribe(filters, {subscribeToSelf: false}, newLineNotif);
-    paintCollection.subscribe(clearFilters, {subscribeToSelf: false}, clearNotif);
+    paintCollection.subscribe(filters, newLineNotif);
+    paintCollection.subscribe(clearFilters, clearNotif);
     self.loadLines(query, 0, 50);
   }());
 }
@@ -259,6 +261,7 @@ function PointerInterface (target) {
     self = this,
     state = null;
 
+
   function translate (e) {
     return { x: (e.offsetX || e.layerX) * (target.width / target.clientWidth),
              y: (e.offsetY || e.layerY) * (target.height / target.clientHeight)};
@@ -320,7 +323,7 @@ function CanvasViewport (target) {
     context.beginPath();
     context.moveTo(data.px, data.py);
     context.lineTo(data.x, data.y);
-    context.lineWidth = BRUSH_WIDTH;
+    context.lineWidth = data.w || BRUSH_WIDTH;
     context.lineCap = 'round';
     context.stroke();
   };
@@ -332,14 +335,17 @@ function CanvasViewport (target) {
 }
 
 
-function PaintControls (target) {
+function PaintControls (kuzzle, target) {
   var
     self = this,
+    settingsCollection,
     users,
     all,
     alls,
     initial,
     menu;
+
+  settingsCollection = kuzzle.dataCollectionFactory('settings', 'paint');
 
   users = document.getElementById('users-online');
   menu = document.getElementById('menu-expander');
@@ -347,7 +353,32 @@ function PaintControls (target) {
   all = target.getElementsByTagName('input');
   initial = all[0];
 
-  this.color = initial.value;
+  this.color = null;
+  this.size = null;
+  this.mode = null;
+  this.precision = null;
+
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].name === 'color' && this.color === null) {
+      this.color = all[i].value;
+    }
+    if (all[i].name === 'size' && this.size === null) {
+      this.size = all[i].value;
+    }
+    if (all[i].name === 'mode' && this.mode === null) {
+      this.mode = all[i].value;
+    }
+    if (all[i].name === 'precision' && this.precision === null) {
+      this.precision = all[i].value;
+    }
+
+    settingsCollection.publishMessage({
+      color: this.color,
+      size: this.size,
+      mode: this.mode,
+      precision: this.precision
+    })
+  }
 
   this.setOnlineUsers = function (value) {
     users.innerHTML = value;
@@ -362,10 +393,29 @@ function PaintControls (target) {
     if (event.preventDefault) {
       event.preventDefault();
     }
-    self.color = event.target.value;
+    if (event.target.name === 'color') {
+      self.color = event.target.value;
+    }
+    if (event.target.name === 'size') {
+      self.size = event.target.value;
+    }
+    if (event.target.name === 'mode') {
+      self.mode = event.target.value;
+    }
+    if (event.target.name === 'precision') {
+      self.precision = event.target.value;
+    }
+
+    settingsCollection.publishMessage({
+      color: self.color,
+      size: self.size,
+      mode: self.mode,
+      precision: self.precision
+    })
   }
 
   if (target.addEventListener) {
+    target.addEventListener('input', onchange);
     target.addEventListener('change', onchange);
     menu.addEventListener('touchstart', onmenuclick);
     menu.addEventListener('click', onmenuclick);
